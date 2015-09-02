@@ -236,10 +236,13 @@ namespace Hangfire.MySql.src
 
         public HashSet<string> GetAllItemsFromSet(string key)
         {
-            return new HashSet<string>(
+            var values = UsingDatabase(db =>
+                db.GetTable<Entities.ScoredValue>()
+                    .Where(h => h.Key == key)
+                    .Select(h => h.Value))
+                .ToArray();
 
-                UsingDatabase(db =>
-                    db.GetTable<Entities.Hash>().Where(h => h.Key == key).Select(h => h.Value)));
+            return new HashSet<string>(values);
 
         }
 

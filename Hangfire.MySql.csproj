@@ -84,6 +84,7 @@
     <Compile Include="src\Entities\EnqueuedAndFetchedCount.cs" />
     <Compile Include="src\Entities\JobParameter.cs" />
     <Compile Include="src\Entities\JobQueue.cs" />
+    <Compile Include="src\Entities\List.cs" />
     <Compile Include="src\Entities\ScoredValue.cs" />
     <Compile Include="src\Entities\Server.cs" />
     <Compile Include="src\Entities\Hash.cs" />

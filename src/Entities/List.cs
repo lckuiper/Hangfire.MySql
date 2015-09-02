@@ -7,20 +7,8 @@ using LinqToDB.Mapping;
 
 namespace Hangfire.MySql.src.Entities
 {
-
-    /**
-     
-     * CREATE TABLE [HangFire].[Counter](
-			[Id] [int] IDENTITY(1,1) NOT NULL,
-			[Key] [nvarchar](100) NOT NULL,
-			[Value] [tinyint] NOT NULL,
-			[ExpireAt] [datetime] NULL,
-
-     * 
-     */
-
     [Table]
-    public class Counter
+    public class List
     {
         [PrimaryKey]
         public int Id { get; set; }
@@ -29,17 +17,18 @@ namespace Hangfire.MySql.src.Entities
         public string Key { get; set; }
 
         [Column]
-        public int Value { get; set; }
+        public string Value { get; set; }
 
         [Column]
         public DateTime? ExpireAt { get; set; }
 
-
-        public static int IncrementValue = 1;
-        public static int DecrementValue = -1;
-
-
     }
 
-
+    /** CREATE TABLE [HangFire].[List](
+            [Id] [int] IDENTITY(1,1) NOT NULL,
+            [Key] [nvarchar](100) NOT NULL,
+            [Value] [nvarchar](max) NULL,
+            [ExpireAt] [datetime] NULL,
+     * 
+     * */
 }

@@ -237,7 +237,7 @@ namespace Hangfire.MySql.src
         public HashSet<string> GetAllItemsFromSet(string key)
         {
             var values = UsingDatabase(db =>
-                db.GetTable<Entities.ScoredValue>()
+                db.GetTable<Entities.Set>()
                     .Where(h => h.Key == key)
                     .Select(h => h.Value))
                 .ToArray();
@@ -248,7 +248,7 @@ namespace Hangfire.MySql.src
 
         public string GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore)
         {
-            return UsingTable<ScoredValue, string>(table =>
+            return UsingTable<Set, string>(table =>
 
                 table.Where(v => v.Key == key)
                     .Where(v => (v.Score >= fromScore) && (v.Score <= toScore))

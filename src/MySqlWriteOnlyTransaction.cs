@@ -176,8 +176,8 @@ namespace Hangfire.MySql.src
 
             QueueCommand(db =>
             {
-                db.GetTable<ScoredValue>().Where(sv => (sv.Key == key) && (sv.Value == value)).Delete();
-                db.Insert(new ScoredValue()
+                db.GetTable<Set>().Where(sv => (sv.Key == key) && (sv.Value == value)).Delete();
+                db.Insert(new Set()
                 {
                     Key = key,
                     Value = value,
@@ -192,7 +192,7 @@ namespace Hangfire.MySql.src
         {
             AcquireSetLock();
 
-            QueueCommand(db => db.GetTable<ScoredValue>().Where(sv => (sv.Key == key) && (sv.Value == value)).Delete());
+            QueueCommand(db => db.GetTable<Set>().Where(sv => (sv.Key == key) && (sv.Value == value)).Delete());
 
         }
 

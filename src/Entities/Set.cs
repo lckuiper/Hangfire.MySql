@@ -8,7 +8,7 @@ using LinqToDB.Mapping;
 namespace Hangfire.MySql.src.Entities
 {
     [Table]
-    internal class ScoredValue
+    internal class Set
     {
         [PrimaryKey]
         public int Id { get; set; }

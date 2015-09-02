@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Hangfire.Annotations;
+using Hangfire.Common;
 using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
 using LinqToDB;
@@ -36,35 +37,35 @@ namespace Hangfire.MySql.src
         public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
         {
 
-            // TODO add queues
+            int jobQueueId = 0;
 
-            string sql = "UPDATE JobQueue "
-                         + " SET FetchedAt = CURTIME(), Id=LAST_INSERT_ID(Id) "
-                         + " WHERE FetchedAt IS NULL "
-                         + " ORDER BY Id "
-                         + " LIMIT 1; "
-                         + " SELECT LAST_INSERT_ID()";
-
-            MySqlCommand comm = new MySqlCommand(sql, Connection);
-
-            var x = Convert.ToInt32(comm.ExecuteScalar());
-
-
-            Type y = x.GetType();
-
-            if (x>0)
+            do
             {
-                return UsingTable<Entities.JobQueue, MySqlFetchedJob>(table =>
-                {
-                    var jobQueue = table.Single(jq => jq.Id == (int) x);
-                    return new MySqlFetchedJob(Connection, jobQueue.Id, jobQueue.Id.ToString(), jobQueue.Queue);
-                });
-            }
+                cancellationToken.ThrowIfCancellationRequested();
 
-            return null;
+                string sql = "UPDATE JobQueue "
+                             + " SET FetchedAt = CURTIME(), Id=LAST_INSERT_ID(Id) "
+                             + " WHERE FetchedAt IS NULL "
+                             + " ORDER BY Id "
+                             + " LIMIT 1; "
+                             + " SELECT LAST_INSERT_ID()";
+
+                MySqlCommand comm = new MySqlCommand(sql, Connection);
+
+                jobQueueId = Convert.ToInt32(comm.ExecuteScalar());
+
+
+                cancellationToken.WaitHandle.WaitOne(TimeSpan.FromSeconds(3));
+                cancellationToken.ThrowIfCancellationRequested();
+
+            } while (jobQueueId == 0);
+
+            return UsingTable<Entities.JobQueue, MySqlFetchedJob>(table =>
+            {
+                var jobQueue = table.Single(jq => jq.Id == (int) jobQueueId);
+                return new MySqlFetchedJob(Connection, jobQueue.Id, jobQueue.Id.ToString(), jobQueue.Queue);
+            });
         }
-
-    
 
         public void Enqueue(string queue, string jobId)
         {

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Diagnostics;
 using System.Linq;
 using System.Resources;
 using System.Runtime.InteropServices;
@@ -42,7 +43,12 @@ namespace Hangfire.MySql.src
 
         public void ExpireJob(string jobId, TimeSpan expireIn)
         {
-            throw new NotImplementedException();
+            QueueCommand(db =>
+
+               db.GetTable<Entities.Job>()
+                   .Where<Job>(j => j.Id == Convert.ToInt32(jobId))
+                   .Set(j => j.ExpireAt, DateTime.UtcNow + expireIn)
+                   .Update());
         }
 
         private readonly DateTime? NullDateTime = null;
@@ -61,17 +67,24 @@ namespace Hangfire.MySql.src
 
         public void SetJobState(string jobId, IState state)
         {
-            using (var db = CreateDataConnection())
+            jobId.Should().NotBeNullOrEmpty();
+            state.Should().NotBeNull();
+
+            Debug.WriteLine("#" + jobId + " SetJobState " + state.Name);
+
+            QueueCommand(db =>
             {
-                var jobState = BuildState(jobId, state);
+                var persistedState = BuildState(jobId, state);
+                var stateId = db.InsertWithIdentity(persistedState);
 
 
                 db.GetTable<Job>().Where(j => j.Id == Convert.ToInt32(jobId))
-                    .Set(j => j.StateName, state.Name)
-                    .Set(j => j.StateReason, state.Reason)
-                    .Set(j => j.StateData, jobState.Data)
+                    .Set(j => j.StateId, stateId)
+                    .Set(j => j.StateName, persistedState.Name)
+                    .Set(j => j.StateReason, persistedState.Reason)
+                    .Set(j => j.StateData, persistedState.Data)
                     .Update();
-            }
+            });
 
         }
 
@@ -93,16 +106,13 @@ namespace Hangfire.MySql.src
             jobId.Should().NotBeNullOrEmpty();
             state.Should().NotBeNull();
 
+            Debug.WriteLine("#" + jobId + " AddJobState " + state.Name);
+
+
             QueueCommand(db =>
             {
                 var persistedState = BuildState(jobId, state);
-                var stateId = db.InsertWithIdentity(persistedState);
-                db.GetTable<Job>().Where(j => j.Id == persistedState.JobId)
-                    .Set(j => j.StateId, stateId)
-                    .Set(j => j.StateName, persistedState.Name)
-                    .Set(j => j.StateReason, persistedState.Reason)
-                    .Set(j => j.StateData, persistedState.Data)
-                    .Update();
+                db.InsertWithIdentity(persistedState);
             });
 
 

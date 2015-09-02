@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -22,9 +23,18 @@ namespace Hangfire.MySql
 
         internal MySqlConnection CreateAndOpenConnection()
         {
-            var connection = new MySqlConnection(_connectionString);
-            connection.Open();
-            return connection;
+            try
+            {
+
+                var connection = new MySqlConnection(_connectionString);
+                connection.Open();
+                return connection;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+                throw;
+            }
         }
 
 

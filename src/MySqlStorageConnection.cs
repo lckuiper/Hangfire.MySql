@@ -132,16 +132,19 @@ namespace Hangfire.MySql.src
             UsingDatabase(db =>
             {
                 int jobId = Convert.ToInt32(id);
-                db.GetTable<JobParameter>().Where(jp => jp.JobId == jobId).Delete();
-                db.Insert(new JobParameter() {JobId = jobId, Name = name, Value = value});
+                db.GetTable<JobParameter>()
+                    .Where(jp => jp.JobId == Convert.ToInt32(id))
+                    .Where(jp => jp.Name == name)
+                    .Delete();
+                db.Insert(new JobParameter() 
+                    {JobId = jobId, Name = name, Value = value});
             });
         }
 
         public string GetJobParameter(string id, string name)
         {
-            return UsingTable<JobParameter,string>(table =>
-                table.Where(jp => jp.JobId == Convert.ToInt32(id)).Select(jp => jp.Value).FirstOrDefault());
-
+            return UsingTable<JobParameter,string>(table => table.Where(jp => jp.JobId == Convert.ToInt32(id)).Where(jp=>jp.Name==name)
+                    .Select(jp => jp.Value).FirstOrDefault());
         }
 
         public JobData GetJobData(string jobId)

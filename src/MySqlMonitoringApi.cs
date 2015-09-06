@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Configuration;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Hangfire.Common;
+using Hangfire.MySql.Common;
 using Hangfire.MySql.src.Entities;
 using Hangfire.States;
 using Hangfire.Storage;
@@ -12,16 +15,14 @@ using MySql.Data.MySqlClient;
 
 namespace Hangfire.MySql.src
 {
-    internal class MySqlMonitoringApi : IMonitoringApi
+    internal class MySqlMonitoringApi : ShortConnectingDatabaseActor, IMonitoringApi
     {
-        private readonly string _connectionString;
         private readonly PersistentJobQueueProviderCollection _queueProviders;
 
         public MySqlMonitoringApi(
             string connectionString,
-            PersistentJobQueueProviderCollection queueProviders)
+            PersistentJobQueueProviderCollection queueProviders) : base(connectionString)
         {
-            _connectionString = connectionString;
             _queueProviders = queueProviders;
         }
 
@@ -32,19 +33,16 @@ namespace Hangfire.MySql.src
 
         public IList<ServerDto> Servers()
         {
-            return new ServerDto[0];
-            /**
-            return UseConnection<IList<ServerDto>>(connection =>
+            return UsingTable<Entities.Server, IList<ServerDto>>(servers =>
+
             {
-                var servers = connection.Query<Entities.Server>(
-                    @"select * from HangFire.Server")
-                    .ToList();
 
                 var result = new List<ServerDto>();
 
                 foreach (var server in servers)
                 {
                     var data = JobHelper.FromJson<ServerData>(server.Data);
+
                     result.Add(new ServerDto
                     {
                         Name = server.Id,
@@ -53,18 +51,21 @@ namespace Hangfire.MySql.src
                         StartedAt = data.StartedAt.HasValue ? data.StartedAt.Value : DateTime.MinValue,
                         WorkersCount = data.WorkerCount
                     });
+
                 }
 
-                return result;
+                Debug.WriteLine("MySqlMonitoringApi  Servers() returning " + result.Count);
+
+                return result.ToList();
+
             });
-             * 
-             * **/
+
         }
 
         public JobDetailsDto JobDetails(string jobId)
         {
-            return new JobDetailsDto();
-            ;
+           return new JobDetailsDto(); 
+
         }
 
         public StatisticsDto GetStatistics()

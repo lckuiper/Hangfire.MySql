@@ -20,10 +20,10 @@ namespace Hangfire.MySql.src
         private static readonly TimeSpan WaitBetweenAttempts = TimeSpan.FromSeconds(1);
         private int _lockId;
 
-        public MySqlDistributedLock(string resource, TimeSpan timeout, MySqlConnection connection)
+        public MySqlDistributedLock(string resource, TimeSpan timeout, string connectionString)
         {
             _resource = resource;
-            _connection = connection;
+            _connection = new MySqlConnection(connectionString);
             var tooLateTime = DateTime.UtcNow + timeout;
 
             while (true)
@@ -41,6 +41,9 @@ namespace Hangfire.MySql.src
 
 
             }
+
+            Debug.WriteLine("acquired MySqlDistributedLock " + _resource);
+
 
 
         }
@@ -68,6 +71,7 @@ namespace Hangfire.MySql.src
 
         public void Dispose()
         {
+            Debug.WriteLine("disposing MySqlDistributedLock " + _resource);
 
             if (!_lockDeleted)
             {

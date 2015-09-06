@@ -22,7 +22,8 @@ namespace Hangfire.MySql.src.Entities
         [Column]
         public DateTime? FetchedAt { get; set; }
 
-       
+        [Column]
+        public string FetchToken { get; set; }
     }
 }
 

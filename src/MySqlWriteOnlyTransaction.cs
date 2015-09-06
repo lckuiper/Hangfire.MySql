@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Hangfire.MySql.Common;
 using Hangfire.MySql.src.Entities;
 using Hangfire.States;
 using Hangfire.Storage;
@@ -18,7 +19,7 @@ using Newtonsoft.Json;
 
 namespace Hangfire.MySql.src
 {
-    public class MySqlWriteOnlyTransaction : DatabaseDependant, IWriteOnlyTransaction
+    public class MySqlWriteOnlyTransaction : ShortConnectingDatabaseActor, IWriteOnlyTransaction
     {
         private readonly PersistentJobQueueProviderCollection _queueProviders;
 
@@ -30,11 +31,10 @@ namespace Hangfire.MySql.src
 
 
         public MySqlWriteOnlyTransaction(
-            MySqlConnection connection,
-            PersistentJobQueueProviderCollection queueProviders) : base(connection)
+            string connectionString,
+            PersistentJobQueueProviderCollection queueProviders) : base(connectionString)
         {
             _queueProviders = queueProviders;
-            if (connection == null) throw new ArgumentNullException("connection");
             if (queueProviders == null) throw new ArgumentNullException("queueProviders");
 
         }
@@ -45,10 +45,10 @@ namespace Hangfire.MySql.src
         {
             QueueCommand(db =>
 
-               db.GetTable<Entities.Job>()
-                   .Where<Job>(j => j.Id == Convert.ToInt32(jobId))
-                   .Set(j => j.ExpireAt, DateTime.UtcNow + expireIn)
-                   .Update());
+                db.GetTable<Entities.Job>()
+                    .Where<Job>(j => j.Id == Convert.ToInt32(jobId))
+                    .Set(j => j.ExpireAt, DateTime.UtcNow + expireIn)
+                    .Update());
         }
 
         private readonly DateTime? NullDateTime = null;
@@ -121,7 +121,7 @@ namespace Hangfire.MySql.src
         public void AddToQueue(string queue, string jobId)
         {
             var provider = _queueProviders.GetProvider(queue);
-            var persistentQueue = provider.GetJobQueue(Connection);
+            var persistentQueue = provider.GetJobQueue(ConnectionString);
 
             QueueCommand(_ => persistentQueue.Enqueue(queue, jobId));
         }
@@ -257,7 +257,7 @@ namespace Hangfire.MySql.src
                         Value = pair.Value
                     });
                 }
-           
+
             });
         }
 
@@ -274,7 +274,7 @@ when not matched then insert ([Key], Field, Value) values (Source.[Key], Source.
             QueueCommand(x => x.Execute(
                 sql,
                 keyValuePairs.Select(y => new { key = key, field = y.Key, value = y.Value })));*/
-    
+
         public void RemoveHash(string key)
         {
             AcquireHashLock();
@@ -283,12 +283,31 @@ when not matched then insert ([Key], Field, Value) values (Source.[Key], Source.
 
         public void Commit()
         {
+            Debug.WriteLine("enter Commit()");
+
             var timeout = TimeSpan.FromSeconds(5);
             var locks =
-                _lockedResources.Select(resource => new MySqlDistributedLock(resource, timeout, Connection)).ToList();
+                _lockedResources.Select(resource => new MySqlDistributedLock(resource, timeout, ConnectionString))
+                    .ToList();
+
+            try
+            {
 
 
-            UsingDatabase(db => { foreach (var command in _commandQueue) command(db); });
+                UsingDatabase(db => { foreach (var command in _commandQueue) command(db); });
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
+            finally
+            {
+                foreach (var distributedLock in locks)
+                    distributedLock.Dispose();
+
+            }
+            Debug.WriteLine("exit Commit()");
+
 
         }
 
@@ -319,6 +338,10 @@ when not matched then insert ([Key], Field, Value) values (Source.[Key], Source.
 
         public void Dispose()
         {
+
+
+
+
             // TODO
             //throw new NotImplementedException();
         }

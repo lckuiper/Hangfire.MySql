@@ -3,26 +3,26 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Hangfire.MySql.Common;
 using Hangfire.Storage;
 using LinqToDB;
 using MySql.Data.MySqlClient;
 
 namespace Hangfire.MySql.src
 {
-    internal class MySqlFetchedJob : DatabaseDependant, IFetchedJob
+    internal class MySqlFetchedJob : ShortConnectingDatabaseActor, IFetchedJob
     {
         private bool _disposed;
         private bool _removedFromQueue;
         private bool _requeued;
 
         public MySqlFetchedJob(
-            MySqlConnection connection,
+            string connectionString,
             int id,
             string jobId,
             string queue)
-            :base(connection)
+            :base(connectionString)
         {
-            if (connection == null) throw new ArgumentNullException("connection");
             if (jobId == null) throw new ArgumentNullException("jobId");
             if (queue == null) throw new ArgumentNullException("queue");
 

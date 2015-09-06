@@ -82,6 +82,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="src\Common\ConnectionBoundDatabaseActor.cs" />
+    <Compile Include="src\Common\ShortConnectingDatabaseActor.cs" />
     <Compile Include="src\Entities\Counter.cs" />
     <Compile Include="src\Entities\EnqueuedAndFetchedCount.cs" />
     <Compile Include="src\Entities\JobParameter.cs" />
@@ -97,7 +99,7 @@
     <Compile Include="src\IPersistenJobQueueMonitoringApi.cs" />
     <Compile Include="src\IPersistentJobQueue.cs" />
     <Compile Include="src\IPersistentJobQueueProvider.cs" />
-    <Compile Include="src\DatabaseDependant.cs" />
+    <Compile Include="src\Common\DatabaseActor.cs" />
     <Compile Include="src\MySqlDistributedLock.cs" />
     <Compile Include="src\MySqlDistributedLockException.cs" />
     <Compile Include="src\MySqlFetchedJob.cs" />
@@ -142,6 +144,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="LinqToDB.Templates\CopyMe.MySql.tt.txt" />
+    <Resource Include="src\Resources\install.sql" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

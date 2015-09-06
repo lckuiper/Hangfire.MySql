@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -8,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Hangfire.Common;
+using Hangfire.MySql.Common;
 using Hangfire.MySql.src.Entities;
 using Hangfire.Server;
 using Hangfire.Storage;
@@ -22,49 +24,45 @@ using Job = Hangfire.Common.Job;
 namespace Hangfire.MySql.src
 {
 
-    internal class MySqlStorageConnection : DatabaseDependant, IStorageConnection
+    internal class MySqlStorageConnection : ShortConnectingDatabaseActor, IStorageConnection
     {
         private readonly PersistentJobQueueProviderCollection _queueProviders;
 
-        public MySqlStorageConnection(
-            MySqlConnection connection,
+        public MySqlStorageConnection(string connectionString, 
             PersistentJobQueueProviderCollection queueProviders)
-            : this(connection, queueProviders, true)
+            : this(connectionString, queueProviders, true)
         {
         }
 
         public MySqlStorageConnection(
-            MySqlConnection connection,
+            string connectionString,
             PersistentJobQueueProviderCollection queueProviders,
             bool ownsConnection)
-            : base(connection)
+            : base(connectionString)
         {
-            if (connection == null) throw new ArgumentNullException("connection");
-            if (queueProviders == null) throw new ArgumentNullException("queueProviders");
 
+            queueProviders.Should().NotBeNull();
             _queueProviders = queueProviders;
-
-            OwnsConnection = ownsConnection;
         }
 
 
-        public bool OwnsConnection { get; private set; }
-
-
-
+      
         public IWriteOnlyTransaction CreateWriteTransaction()
         {
-            return new MySqlWriteOnlyTransaction(Connection, _queueProviders);
+            return new MySqlWriteOnlyTransaction(ConnectionString, _queueProviders);
         }
 
         public IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
         {
-            return new MySqlDistributedLock(resource, timeout, Connection);
+            return new MySqlDistributedLock(resource, timeout, ConnectionString);
         }
 
         public string CreateExpiredJob(Job job, IDictionary<string, string> parameters, DateTime createdAt,
             TimeSpan expireIn)
         {
+
+            Debug.Write("CreateExpiredJob ");
+
 
             // TODO make this a transaction
 
@@ -96,6 +94,7 @@ namespace Hangfire.MySql.src
 
                 }
 
+                Debug.WriteLine("#" + jobId);
 
                 return jobId.ToString(CultureInfo.InvariantCulture);
             });
@@ -121,14 +120,19 @@ namespace Hangfire.MySql.src
                     String.Join(", ", queues)));
             }
 
-            var persistentQueue = providers[0].GetJobQueue(Connection);
+            var persistentQueue = providers[0].GetJobQueue(ConnectionString);
             var fetchedJob = persistentQueue.Dequeue(queues, cancellationToken);
+
+            Debug.WriteLine("#" + fetchedJob.JobId + " fetched ");
+
             return fetchedJob;
 
         }
 
         public void SetJobParameter(string id, string name, string value)
         {
+            Debug.WriteLine("#" + id + " SetJobParameter " + name + "=" + value);
+
             UsingDatabase(db =>
             {
                 int jobId = Convert.ToInt32(id);
@@ -143,12 +147,17 @@ namespace Hangfire.MySql.src
 
         public string GetJobParameter(string id, string name)
         {
+
+            Debug.WriteLine("#" + id + " GetJobParameter " + name);
+
             return UsingTable<JobParameter,string>(table => table.Where(jp => jp.JobId == Convert.ToInt32(id)).Where(jp=>jp.Name==name)
                     .Select(jp => jp.Value).FirstOrDefault());
         }
 
         public JobData GetJobData(string jobId)
         {
+            Debug.WriteLine("#" + jobId + " GetJobData");
+
             return UsingTable<Entities.Job,JobData>(table =>
             {
                 Entities.Job persistedJob = table.Single(j => j.Id == Convert.ToInt32(jobId));
@@ -178,6 +187,9 @@ namespace Hangfire.MySql.src
 
         public StateData GetStateData(string jobId)
         {
+            Debug.WriteLine("#" + jobId + " GetStateData");
+
+
             return UsingDatabase<StateData>(db =>
 
             {
@@ -198,6 +210,9 @@ namespace Hangfire.MySql.src
         {
             serverId.Should().NotBeNullOrEmpty();
             context.Should().NotBeNull();
+
+            Debug.WriteLine("Announce server " + serverId);
+
 
             var data = new ServerData
             {
@@ -291,10 +306,7 @@ namespace Hangfire.MySql.src
 
         public void Dispose()
         {
-            if (OwnsConnection)
-            {
-                Connection.Dispose();
-            }
+            
         }
     }
 

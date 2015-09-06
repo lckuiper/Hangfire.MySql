@@ -32,7 +32,33 @@ namespace Hangfire.MySql.src
 
         public IList<ServerDto> Servers()
         {
-            return new List<ServerDto>();
+            return new ServerDto[0];
+            /**
+            return UseConnection<IList<ServerDto>>(connection =>
+            {
+                var servers = connection.Query<Entities.Server>(
+                    @"select * from HangFire.Server")
+                    .ToList();
+
+                var result = new List<ServerDto>();
+
+                foreach (var server in servers)
+                {
+                    var data = JobHelper.FromJson<ServerData>(server.Data);
+                    result.Add(new ServerDto
+                    {
+                        Name = server.Id,
+                        Heartbeat = server.LastHeartbeat,
+                        Queues = data.Queues,
+                        StartedAt = data.StartedAt.HasValue ? data.StartedAt.Value : DateTime.MinValue,
+                        WorkersCount = data.WorkerCount
+                    });
+                }
+
+                return result;
+            });
+             * 
+             * **/
         }
 
         public JobDetailsDto JobDetails(string jobId)

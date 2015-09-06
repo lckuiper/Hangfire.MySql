@@ -10,8 +10,8 @@ namespace Hangfire.MySql.src
 {
         public interface IPersistentJobQueueProvider
         {
-            IPersistentJobQueue GetJobQueue(MySqlConnection connection);
-            IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi(MySqlConnection connection);
+            IPersistentJobQueue GetJobQueue(string connectionString);
+            IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi(string connectionString);
         }
     
 }

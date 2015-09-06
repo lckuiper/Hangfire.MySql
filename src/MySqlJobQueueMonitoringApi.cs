@@ -5,19 +5,19 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Hangfire.MySql.Common;
 using Hangfire.MySql.src.Entities;
 using MySql.Data.MySqlClient;
 
 namespace Hangfire.MySql.src
 {
-    public class MySqlJobQueueMonitoringApi : DatabaseDependant, IPersistentJobQueueMonitoringApi
+    public class MySqlJobQueueMonitoringApi : ShortConnectingDatabaseActor, IPersistentJobQueueMonitoringApi
     {
         private readonly MySqlStorageOptions _options;
 
-        public MySqlJobQueueMonitoringApi(MySqlConnection connection, MySqlStorageOptions options)
-            :base(connection)
+        public MySqlJobQueueMonitoringApi(string connectionString, MySqlStorageOptions options)
+            :base(connectionString)
         {
-            connection.Should().NotBeNull();
             options.Should().NotBeNull();
             _options = options;
         }

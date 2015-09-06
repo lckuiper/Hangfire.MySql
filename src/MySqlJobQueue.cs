@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -10,6 +11,8 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Hangfire.Annotations;
 using Hangfire.Common;
+using Hangfire.MySql.Common;
+using Hangfire.MySql.src.Entities;
 using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
 using LinqToDB;
@@ -19,14 +22,12 @@ using MySql.Data.MySqlClient;
 
 namespace Hangfire.MySql.src
 {
-    internal class MySqlJobQueue : DatabaseDependant, IPersistentJobQueue
+    internal class MySqlJobQueue : ShortConnectingDatabaseActor, IPersistentJobQueue
     {
         private readonly MySqlStorageOptions _options;
 
-        public MySqlJobQueue(MySqlConnection connection, MySqlStorageOptions options) : base(connection)
+        public MySqlJobQueue(string connectionString, MySqlStorageOptions options) : base(connectionString)
         {
-            if (options == null) throw new ArgumentNullException("options");
-            if (connection == null) throw new ArgumentNullException("connection");
             _options = options;
         }
 
@@ -37,34 +38,38 @@ namespace Hangfire.MySql.src
         public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
         {
 
-            int jobQueueId = 0;
-
-            do
+            return UsingDatabase(db =>
             {
-                cancellationToken.ThrowIfCancellationRequested();
 
-                string sql = "UPDATE JobQueue "
-                             + " SET FetchedAt = CURTIME(), Id=LAST_INSERT_ID(Id) "
-                             + " WHERE FetchedAt IS NULL "
-                             + " ORDER BY Id "
-                             + " LIMIT 1; "
-                             + " SELECT LAST_INSERT_ID()";
+                string token = Guid.NewGuid().ToString();
 
-                MySqlCommand comm = new MySqlCommand(sql, Connection);
+                do
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                jobQueueId = Convert.ToInt32(comm.ExecuteScalar());
+                    int nUpdated = db.GetTable<JobQueue>().Where(jq => jq.FetchedAt == NullDateTime)
+                        .Take(1)
+                        .Set(jq => jq.FetchedAt, DateTime.UtcNow)
+                        .Set(jq => jq.FetchToken, token)
+                        .Update();
 
+                    if (nUpdated != 0)
+                    {
+                        nUpdated.Should().Be(1);
+                        var jobQueue = db.GetTable<JobQueue>().Single(jq => jq.FetchToken == token);
+                        return new MySqlFetchedJob(ConnectionString,
+                            jobQueue.Id,
+                            jobQueue.JobId.ToString(CultureInfo.InvariantCulture),
+                            jobQueue.Queue);
+                    }
 
-                cancellationToken.WaitHandle.WaitOne(TimeSpan.FromSeconds(3));
-                cancellationToken.ThrowIfCancellationRequested();
+                    cancellationToken.WaitHandle.WaitOne(TimeSpan.FromSeconds(3));
+                    cancellationToken.ThrowIfCancellationRequested();
 
-            } while (jobQueueId == 0);
-
-            return UsingTable<Entities.JobQueue, MySqlFetchedJob>(table =>
-            {
-                var jobQueue = table.Single(jq => jq.Id == (int) jobQueueId);
-                return new MySqlFetchedJob(Connection, jobQueue.Id, jobQueue.Id.ToString(), jobQueue.Queue);
+                } while (true);
             });
+
+
         }
 
         public void Enqueue(string queue, string jobId)

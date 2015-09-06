@@ -5,37 +5,25 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using FluentAssertions;
 using Hangfire.Annotations;
 using Hangfire.Client;
+using Hangfire.MySql.Common;
 using Hangfire.MySql.src;
 using Hangfire.Server;
 using Hangfire.Storage;
+using LinqToDB;
 using MySql.Data.MySqlClient;
 
 namespace Hangfire.MySql
 {
-    public class MySqlStorage : JobStorage
+    public class MySqlStorage : JobStorage, IDisposable
     {
+        private readonly string _connectionString;
         private readonly MySqlStorageOptions _options;
-        private string _connectionString;
-        private MySqlConnection _existingConnection;
+     
 
-
-        internal MySqlConnection CreateAndOpenConnection()
-        {
-            try
-            {
-
-                var connection = new MySqlConnection(_connectionString);
-                connection.Open();
-                return connection;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex.Message);
-                throw;
-            }
-        }
+      
 
 
         public MySqlStorage(string nameOrConnectionString)
@@ -47,27 +35,20 @@ namespace Hangfire.MySql
 
         public MySqlStorage(string nameOrConnectionString, MySqlStorageOptions options)
         {
+            _connectionString = GetConnectionStringFrom(nameOrConnectionString);
             _options = options;
 
-            if (IsConnectionString(nameOrConnectionString))
-            {
-                _connectionString = nameOrConnectionString;
-            }
-            else if (IsConnectionStringInConfiguration(nameOrConnectionString))
-            {
-                _connectionString = ConfigurationManager.ConnectionStrings[nameOrConnectionString].ConnectionString;
-            }
-            else
-            {
-                throw new ArgumentException(
-                    string.Format("Could not find connection string with name '{0}' in application config file",
-                                  nameOrConnectionString));
-            }
-
-
-
+            InitialseDatabaseConnection();
             InitializeQueueProviders();
 
+        }
+
+        protected MySqlConnection Connection { get; private set; }
+
+        private void InitialseDatabaseConnection()
+        {
+            Connection = new MySqlConnection(_connectionString);
+            Connection.Open();
         }
 
         public PersistentJobQueueProviderCollection QueueProviders { get; private set; }
@@ -80,8 +61,7 @@ namespace Hangfire.MySql
 
         public override IStorageConnection GetConnection()
         {
-            var connection = _existingConnection ?? CreateAndOpenConnection();
-            return new MySqlStorageConnection(connection,QueueProviders);
+            return new MySqlStorageConnection(_connectionString, QueueProviders);
         }
 
         public override IEnumerable<IServerComponent> GetComponents()
@@ -93,26 +73,34 @@ namespace Hangfire.MySql
 
         private void InitializeQueueProviders()
         {
-            var defaultQueueProvider = new MySqlJobQueueProvider(CreateAndOpenConnection(),_options);
+            var defaultQueueProvider = new MySqlJobQueueProvider(_connectionString,_options);
             QueueProviders = new PersistentJobQueueProviderCollection(defaultQueueProvider);
         }
 
 
-
-        
-
-        private bool IsConnectionString(string nameOrConnectionString)
+        private string GetConnectionStringFrom(string nameOrConnectionString)
         {
-            return nameOrConnectionString.Contains(";");
+            nameOrConnectionString.Should().NotBeNullOrEmpty();
+
+            if (nameOrConnectionString.Contains(";"))
+                return nameOrConnectionString;
+
+
+            ConfigurationManager.ConnectionStrings[nameOrConnectionString].Should().NotBeNull("Connection string name "
+                                                                                              + nameOrConnectionString +
+                                                                                              " not found.");
+
+            return ConfigurationManager.ConnectionStrings[nameOrConnectionString].ConnectionString;
+
+
         }
 
-        private bool IsConnectionStringInConfiguration(string connectionStringName)
+
+        public void Dispose()
         {
-            var connectionStringSetting = ConfigurationManager.ConnectionStrings[connectionStringName];
-
-            return connectionStringSetting != null;
+            Connection.Dispose();
+            
         }
-
     }
 
     public static class MySqlStorageExtensions

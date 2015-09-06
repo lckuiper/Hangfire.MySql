@@ -201,7 +201,7 @@ namespace Hangfire.MySql.src
         }
 
 
-public JobList<FailedJobDto> FailedJobs(int @from, int count)
+        public JobList<FailedJobDto> FailedJobs(int @from, int count)
         {
             return new JobList<FailedJobDto>(new List<KeyValuePair<string, FailedJobDto>>());
 
@@ -216,7 +216,7 @@ public JobList<FailedJobDto> FailedJobs(int @from, int count)
 
         public long ScheduledCount()
         {
-            return 0;
+            return GetNJobsInState(ScheduledState.StateName);
         }
 
         public long EnqueuedCount(string queue)
@@ -231,22 +231,22 @@ public JobList<FailedJobDto> FailedJobs(int @from, int count)
 
         public long FailedCount()
         {
-            throw new NotImplementedException();
+            return GetNJobsInState(FailedState.StateName);
         }
 
         public long ProcessingCount()
         {
-            return 0;
+            return GetNJobsInState(ProcessingState.StateName);
         }
 
         public long SucceededListCount()
         {
-            return UsingTable<Entities.Job, long>(jobs => jobs.Count(j => j.StateName == "Succeeded"));
+            return GetNJobsInState(SucceededState.StateName);
         }
 
         public long DeletedListCount()
         {
-            return 0;
+            return GetNJobsInState(DeletedState.StateName);
         }
 
         public IDictionary<DateTime, long> SucceededByDatesCount()

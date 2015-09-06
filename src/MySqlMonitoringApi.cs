@@ -109,9 +109,34 @@ namespace Hangfire.MySql.src
 
         }
 
+        protected long GetCounterTotal(string key)
+        {
+            return UsingTable<Counter, long>(counters => counters.Where(c => c.Key == key).Sum(c=>c.Value));
+        }
+
+        protected long GetNJobsInState(string stateName)
+        {
+            return UsingTable<Entities.Job, long>(jobs => jobs.Count(j => j.StateName == stateName));
+        }
+
         public StatisticsDto GetStatistics()
         {
-            return new StatisticsDto();
+            return new StatisticsDto()
+            {
+                Deleted = GetCounterTotal("stats:deleted"),
+                Enqueued = GetNJobsInState(EnqueuedState.StateName),
+                Failed = GetNJobsInState(FailedState.StateName),
+                Processing = GetNJobsInState(ProcessingState.StateName),
+                Queues = 0,
+                /* _queueProviders
+                    .SelectMany(x => x.GetJobQueueMonitoringApi(connection).GetQueues())
+                    .Count()
+                 * */
+                Recurring = UsingTable<Entities.Set, long>(sets => sets.Count(s => s.Key == "recurring-jobs")),
+                Succeeded = GetCounterTotal("stats:succeeded"),
+                Scheduled = GetNJobsInState(ScheduledState.StateName),
+                Servers = Servers().Count
+            };
         }
 
         public JobList<EnqueuedJobDto> EnqueuedJobs(string queue, int @from, int perPage)

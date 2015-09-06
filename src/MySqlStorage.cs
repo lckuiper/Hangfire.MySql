@@ -56,7 +56,6 @@ namespace Hangfire.MySql
 
         public override IMonitoringApi GetMonitoringApi()
         {
-            
             return new MySqlMonitoringApi(_connectionString, QueueProviders);
         }
 

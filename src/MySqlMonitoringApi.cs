@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,6 +13,8 @@ using Hangfire.States;
 using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
 using MySql.Data.MySqlClient;
+using Newtonsoft.Json;
+using Job = Hangfire.Common.Job;
 
 namespace Hangfire.MySql.src
 {
@@ -21,7 +24,8 @@ namespace Hangfire.MySql.src
 
         public MySqlMonitoringApi(
             string connectionString,
-            PersistentJobQueueProviderCollection queueProviders) : base(connectionString)
+            PersistentJobQueueProviderCollection queueProviders)
+            : base(connectionString)
         {
             _queueProviders = queueProviders;
         }
@@ -34,7 +38,6 @@ namespace Hangfire.MySql.src
         public IList<ServerDto> Servers()
         {
             return UsingTable<Entities.Server, IList<ServerDto>>(servers =>
-
             {
 
                 var result = new List<ServerDto>();
@@ -62,9 +65,47 @@ namespace Hangfire.MySql.src
 
         }
 
+        private static Job DeserializeJob(string invocationData, string arguments)
+        {
+            var data = JobHelper.FromJson<InvocationData>(invocationData);
+            data.Arguments = arguments;
+
+            try
+            {
+                return data.Deserialize();
+            }
+            catch (JobLoadException)
+            {
+                return null;
+            }
+        }
+
         public JobDetailsDto JobDetails(string jobId)
         {
-           return new JobDetailsDto(); 
+            return UsingDatabase<JobDetailsDto>(db =>
+            {
+                var job = db.GetTable<Entities.Job>().Single(j => j.Id == Convert.ToInt32(jobId));
+
+                var histories = db.GetTable<Entities.JobState>().Where(js => js.JobId == job.Id).Select(jobState => new StateHistoryDto()
+                {
+                    CreatedAt = jobState.CreatedAt,
+                    Reason = jobState.Reason,
+                    StateName = jobState.Name,
+                    Data = JsonConvert.DeserializeObject<Dictionary<string, string>>(jobState.Data)
+                }).ToList();
+
+
+                var jobDetailsDto = new JobDetailsDto()
+                {
+                    CreatedAt = job.CreatedAt,
+                    ExpireAt = job.ExpireAt,
+                    Properties = db.GetTable<Entities.JobParameter>().Where(jp=>jp.JobId==job.Id).ToDictionary(jp => jp.Name, jp => jp.Value),
+                    History = histories
+                };
+
+                return jobDetailsDto;
+
+            });
 
         }
 
@@ -90,15 +131,52 @@ namespace Hangfire.MySql.src
 
         public JobList<ScheduledJobDto> ScheduledJobs(int @from, int count)
         {
-            throw new NotImplementedException();
+            return new JobList<ScheduledJobDto>(new List<KeyValuePair<string, ScheduledJobDto>>());
         }
 
         public JobList<SucceededJobDto> SucceededJobs(int @from, int count)
         {
-            return new JobList<SucceededJobDto>(new List<KeyValuePair<string, SucceededJobDto>>());
+            return UsingDatabase(db =>
+            {
+
+                var jobs = db.GetTable<Entities.Job>()
+                    .Where(j=>j.StateName=="Succeeded")
+                    .OrderByDescending(j=>j.Id)
+                    .Skip(from)
+                    .Take(count);
+
+                var list = new List<KeyValuePair<string, SucceededJobDto>>();
+
+                foreach (var sqlJob in jobs)
+                {
+
+                    var stateData = JsonConvert.DeserializeObject<Dictionary<string, string>>(sqlJob.StateData);
+
+                    var s = new SucceededJobDto()
+                    {
+                        Job = DeserializeJob(sqlJob.InvocationData, sqlJob.Arguments),
+                        InSucceededState = true,
+                        Result = stateData.ContainsKey("Result") ? stateData["Result"] : null,
+                        TotalDuration = stateData.ContainsKey("PerformanceDuration") && stateData.ContainsKey("Latency")
+                            ? (long?) long.Parse(stateData["PerformanceDuration"]) +
+                              (long?) long.Parse(stateData["Latency"])
+                            : null,
+                        SucceededAt = JobHelper.DeserializeNullableDateTime(stateData["SucceededAt"])
+                    };
+
+                    list.Add(new KeyValuePair<string, SucceededJobDto>(
+                        sqlJob.Id.ToString(CultureInfo.InvariantCulture), s));
+
+                }
+
+                return new JobList<SucceededJobDto>(list);
+
+            });
+
         }
 
-        public JobList<FailedJobDto> FailedJobs(int @from, int count)
+
+public JobList<FailedJobDto> FailedJobs(int @from, int count)
         {
             return new JobList<FailedJobDto>(new List<KeyValuePair<string, FailedJobDto>>());
 
@@ -138,7 +216,7 @@ namespace Hangfire.MySql.src
 
         public long SucceededListCount()
         {
-            return 0;
+            return UsingTable<Entities.Job, long>(jobs => jobs.Count(j => j.StateName == "Succeeded"));
         }
 
         public long DeletedListCount()

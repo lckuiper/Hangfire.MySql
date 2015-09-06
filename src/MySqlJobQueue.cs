@@ -47,7 +47,9 @@ namespace Hangfire.MySql.src
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    int nUpdated = db.GetTable<JobQueue>().Where(jq => jq.FetchedAt == NullDateTime)
+                    int nUpdated = db.GetTable<JobQueue>()
+                        .Where(jq => jq.FetchedAt == NullDateTime)
+                        .Where(jq => queues.Contains(jq.Queue))
                         .Take(1)
                         .Set(jq => jq.FetchedAt, DateTime.UtcNow)
                         .Set(jq => jq.FetchToken, token)

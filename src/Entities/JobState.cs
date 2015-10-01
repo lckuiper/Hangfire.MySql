@@ -10,6 +10,7 @@ namespace Hangfire.MySql.src.Entities
     [Table]
     internal class JobState
     {
+        [PrimaryKey]
         public int Id { get; set; }
         
         [Column]

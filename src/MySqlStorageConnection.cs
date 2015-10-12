@@ -197,7 +197,7 @@ namespace Hangfire.MySql.src
                     .Single(j => j.Id == Convert.ToInt32(jobId))
                     .StateId;
 
-                var stateDataString = db.GetTable<JobState>()
+                var stateDataString = db.GetTable<Entities.JobState>()
                     .Single(js => js.Id == jobStateId)
                     .Data;
 

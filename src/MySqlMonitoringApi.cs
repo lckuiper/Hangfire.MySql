@@ -99,7 +99,7 @@ namespace Hangfire.MySql.src
                 {
                     CreatedAt = job.CreatedAt,
                     ExpireAt = job.ExpireAt,
-                    Properties = db.GetTable<Entities.JobParameter>().Where(jp=>jp.JobId==job.Id).ToDictionary(jp => jp.Name, jp => jp.Value),
+                    Properties = db.GetTable<Entities.JobParameter>().Where(jp => jp.JobId == job.Id).ToDictionary(jp => jp.Name, jp => jp.Value),
                     History = histories
                 };
 
@@ -111,13 +111,18 @@ namespace Hangfire.MySql.src
 
         protected long GetCounterTotal(string key)
         {
-            return UsingTable<Counter, long>(counters => counters.Where(c => c.Key == key).Sum(c=>c.Value));
+            return UsingTable<Counter, long>(counters => counters.Where(c => c.Key == key).Sum(c => c.Value));
         }
 
         protected long GetNJobsInState(string stateName)
         {
             return UsingTable<Entities.Job, long>(jobs => jobs.Count(j => j.StateName == stateName));
         }
+
+
+
+
+
 
         public StatisticsDto GetStatistics()
         {
@@ -165,8 +170,8 @@ namespace Hangfire.MySql.src
             {
 
                 var jobs = db.GetTable<Entities.Job>()
-                    .Where(j=>j.StateName=="Succeeded")
-                    .OrderByDescending(j=>j.Id)
+                    .Where(j => j.StateName == "Succeeded")
+                    .OrderByDescending(j => j.Id)
                     .Skip(from)
                     .Take(count);
 
@@ -183,8 +188,8 @@ namespace Hangfire.MySql.src
                         InSucceededState = true,
                         Result = stateData.ContainsKey("Result") ? stateData["Result"] : null,
                         TotalDuration = stateData.ContainsKey("PerformanceDuration") && stateData.ContainsKey("Latency")
-                            ? (long?) long.Parse(stateData["PerformanceDuration"]) +
-                              (long?) long.Parse(stateData["Latency"])
+                            ? (long?)long.Parse(stateData["PerformanceDuration"]) +
+                              (long?)long.Parse(stateData["Latency"])
                             : null,
                         SucceededAt = JobHelper.DeserializeNullableDateTime(stateData["SucceededAt"])
                     };
@@ -221,6 +226,14 @@ namespace Hangfire.MySql.src
 
         public long EnqueuedCount(string queue)
         {
+            //return UseConnection(connection =>
+            //{
+            // var queueApi = GetQueueApi(queue);
+            // var counters = queueApi.GetEnqueuedAndFetchedCount(queue);
+
+            // return counters.EnqueuedCount ?? 0;
+            // });
+
             return 0;
         }
 
@@ -261,12 +274,108 @@ namespace Hangfire.MySql.src
 
         public IDictionary<DateTime, long> HourlySucceededJobs()
         {
-            return new Dictionary<DateTime, long>();
+            // return new Dictionary<DateTime, long>();
+
+            return GetHourlyTimelineStats("succeeded");
         }
 
         public IDictionary<DateTime, long> HourlyFailedJobs()
         {
             return new Dictionary<DateTime, long>();
         }
+
+
+
+        #region Queue API
+
+        private Dictionary<DateTime, long> GetHourlyTimelineStats(
+            string type)
+        {
+            var endDate = DateTime.UtcNow;
+            var dates = new List<DateTime>();
+            for (var i = 0; i < 24; i++)
+            {
+                dates.Add(endDate);
+                endDate = endDate.AddHours(-1);
+            }
+
+            var keyMaps = dates.ToDictionary(x => String.Format("stats:{0}:{1}", type, x.ToString("yyyy-MM-dd-HH")), x => x);
+
+            return GetTimelineStats(keyMaps);
+        }
+
+        private Dictionary<DateTime, long> GetTimelineStats(
+            string type)
+        {
+            var endDate = DateTime.UtcNow.Date;
+            var dates = new List<DateTime>();
+
+            for (var i = 0; i < 7; i++)
+            {
+                dates.Add(endDate);
+                endDate = endDate.AddDays(-1);
+            }
+            var keyMaps = dates.ToDictionary(x => String.Format("stats:{0}:{1}", type, x.ToString("yyyy-MM-dd")), x => x);
+
+            return GetTimelineStats(keyMaps);
+        }
+
+        private Dictionary<DateTime, long> GetTimelineStats(Dictionary<string, DateTime> keyMaps)
+        {
+            // HAVING:
+            // https://msdn.microsoft.com/en-us/library/vstudio/bb534972(v=vs.100).aspx
+
+            var valuesMap = new Dictionary<string, long>();
+
+            foreach (var key in keyMaps.Keys)
+            {
+                if (!valuesMap.ContainsKey(key)) valuesMap.Add(key, 0);
+            }
+
+            foreach (var key in keyMaps.Keys)
+            {
+                long counter = GetCounterTotal(key);
+
+                if (valuesMap.ContainsKey(key))
+                    valuesMap[key] += counter;
+                else
+                    valuesMap.Add(key, counter);
+            }
+
+            //string sqlQuery = @"
+            //    SELECT ""key"", COUNT(""value"") AS ""count"" 
+            //    FROM """ + _options.SchemaName + @""".""counter""
+            //    GROUP BY ""key""
+            //    HAVING ""key"" = ANY @keys;
+            //    ";
+
+            //var valuesMap = connection.Query(
+            //    sqlQuery,
+            //    new { keys = keyMaps.Keys })
+            //    .ToDictionary(x => (string)x.key, x => (long)x.count);
+                      
+
+            var result = new Dictionary<DateTime, long>();
+            for (var i = 0; i < keyMaps.Count; i++)
+            {
+                var value = valuesMap[keyMaps.ElementAt(i).Key];
+                result.Add(keyMaps.ElementAt(i).Value, value);
+            }
+
+            return result;
+        }
+
+        //private IPersistentJobQueueMonitoringApi GetQueueApi(
+        //   string queueName)
+        //{
+        //    var provider = _queueProviders.GetProvider(queueName);
+        //    var monitoringApi = provider.GetJobQueueMonitoringApi(connection.ConnectionString);
+
+        //    return monitoringApi;
+        //}
+
+        #endregion Queue API
+
+
     }
 }
